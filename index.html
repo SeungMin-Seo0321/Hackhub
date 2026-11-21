@@ -125,17 +125,32 @@ const data = {}, texts = {};
 let current = FOLDERS[0];
 const $q = document.getElementById("q"), $search = document.getElementById("search");
 
+const why={};
+let manifest;
+async function getManifest(){
+  if(manifest!==undefined) return manifest;
+  try{ const r=await fetch("manifest.json",{cache:"no-cache"}); manifest=r.ok?await r.json():null; }
+  catch(e){ manifest=null; }
+  return manifest;
+}
 async function listFolder(f){
+  // 1순위: manifest.json (Vercel 빌드가 자동 생성), 2순위: GitHub API
+  const m=await getManifest();
+  if(m && Array.isArray(m[f])) return m[f].filter(n=>!BIN.test(n));
+  if(!owner||!repo){why[f]="NOREPO";return null;}
   try{
     const r = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${f}?ref=${BRANCH}`);
-    if(!r.ok) throw 0;
+    if(!r.ok){why[f]=r.status;return null;}
     return (await r.json()).filter(x=>x.type==="file" && !BIN.test(x.name)).map(x=>x.name);
-  }catch(e){
-    try{
-      const m = await (await fetch("manifest.json")).json();
-      return (m[f]||[]).filter(n=>!BIN.test(n));
-    }catch(e2){ return null; }
-  }
+  }catch(e){ why[f]="NET"; return null; }
+}
+function errText(f){
+  const w=why[f], who=owner&&repo?`${owner}/${repo}`:"(알 수 없음)";
+  const m={NOREPO:"manifest.json이 없고 주소에서 저장소도 알 수 없어요. Vercel 빌드 명령을 node build.js 로 설정하거나, 주소를 아이디.github.io/저장소명 으로 여세요.",
+   404:"GitHub가 이 폴더를 못 찾았어요. 저장소가 비공개이거나, 저장소·폴더·브랜치 이름이 달라요.",
+   403:"GitHub API 요청 한도를 넘었어요. 잠시 뒤 다시 하거나 manifest.json을 추가하세요.",
+   NET:"GitHub에 연결하지 못했어요. 인터넷 연결을 확인하세요."};
+  return `${m[w]||"알 수 없는 오류예요."}<br><small>확인한 곳: ${who} / ${f} / ${BRANCH} · 응답: ${w||"-"}</small>`;
 }
 async function getText(f,n){
   const k=f+"/"+n;
@@ -163,7 +178,7 @@ function renderList(){
   el.innerHTML="";
   const files=data[current];
   if(files===undefined){el.innerHTML='<div class="skel"><i></i><i></i></div>'.repeat(3);return;}
-  if(files===null){el.innerHTML=`<div class="empty err">${I.warn}<div>목록을 불러오지 못했어요.<br>저장소 이름과 공개 여부를 확인하거나 manifest.json을 추가하세요.</div></div>`;return;}
+  if(files===null){el.innerHTML=`<div class="empty err">${I.warn}<div>${errText(current)}</div></div>`;return;}
   const shown=files.filter(n=>n.toLowerCase().includes(q));
   if(!shown.length){el.innerHTML=`<div class="empty">${I.none}<div>${q?"검색 결과가 없어요.":"이 폴더에 파일이 없어요."}</div></div>`;return;}
   shown.forEach((n,i)=>{
