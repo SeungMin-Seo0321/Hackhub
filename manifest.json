@@ -3,7 +3,9 @@
     "Kicia",
     "Loxy"
   ],
-  "Configs": [],
+  "Configs": [
+    "Kicia_Level1"
+  ],
   "Others": [
     "Example"
   ]
