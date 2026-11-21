@@ -1,0 +1,674 @@
+-- Loxy Aimbot + ESP + Movement
+-- Lightweight custom UI; aimbot, ESP, fly, and noclip.
+
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local Workspace = game:GetService("Workspace")
+local ENV = getgenv()
+if type(ENV.LoxyAimbotCleanup) == "function" then pcall(ENV.LoxyAimbotCleanup) end
+
+pcall(function()
+    RunService:UnbindFromRenderStep("RivalsAimbot")
+    RunService:UnbindFromRenderStep("LoxyAimbot")
+end)
+if type(ENV.LoxyAimbotConnections) == "table" then
+    for _, connectio/n in ipairs(ENV.LoxyAimbotConnections) do
+        pcall(function() connection:Disconnect() end)
+    end
+end
+if ENV.LoxyAimbotUI then
+    pcall(function() ENV.LoxyAimbotUI:Destroy() end)
+end
+ENV.LoxyAimbotConnections = {}
+local generation = (ENV.LoxyAimbotGeneration or 0) + 1
+ENV.LoxyAimbotGeneration = generation
+
+local function track(connection)
+    table.insert(ENV.LoxyAimbotConnections, connection)
+    return connection
+end
+
+local aimbotEnabled = false
+local espEnabled = false
+local flyEnabled = false
+local noclipEnabled = false
+local flySpeed = 50
+local flyVelocity, flyGyro, flyRootPart
+local savedCollisions = {}
+local cleanupFly, restoreNoclip
+local maxDistance = 300
+local smoothness = 0.76
+local acquireTransitionEnabled = true
+local bodyRatio = 50
+local missRatio = 5
+local excludedPlayer = nil
+local excludedName = ""
+local excludedLabel = "Username"
+
+cleanupFly = function()
+    if flyVelocity then pcall(function() flyVelocity:Destroy() end) end
+    if flyGyro then pcall(function() flyGyro:Destroy() end) end
+    flyVelocity, flyGyro, flyRootPart = nil, nil, nil
+end
+restoreNoclip = function()
+    for part, originalValue in pairs(savedCollisions) do
+        if part and part.Parent then pcall(function() part.CanCollide = originalValue end) end
+    end
+    table.clear(savedCollisions)
+end
+
+local function clearESPForCharacter(character)
+    if not character then return end
+    for _, child in ipairs(character:GetDescendants()) do
+        if child.Name == "LoxyESP_Highlight" or child.Name == "LoxyESP_HP"
+            or child.Name == "RivalsESP_Highlight" or child.Name == "RivalsESP_HP" then
+            child:Destroy()
+        end
+    end
+end
+local function clearAllESP()
+    for _, player in ipairs(Players:GetPlayers()) do
+        clearESPForCharacter(player.Character)
+    end
+end
+clearAllESP()
+-- Small, self-contained panel
+local uiParent
+pcall(function()
+    if type(gethui) == "function" then uiParent = gethui() end
+end)
+if not uiParent then
+    uiParent = LocalPlayer:WaitForChild("PlayerGui")
+end
+
+local gui = Instance.new("ScreenGui")
+gui.Name = "LoxyAimbotUI"
+gui.ResetOnSpawn = false
+gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+gui.IgnoreGuiInset = true
+gui.Parent = uiParent
+ENV.LoxyAimbotUI = gui
+
+local colors = {
+    background = Color3.fromRGB(24, 26, 32),
+    surface = Color3.fromRGB(34, 37, 45),
+    accent = Color3.fromRGB(119, 95, 255),
+    text = Color3.fromRGB(240, 241, 246),
+    muted = Color3.fromRGB(160, 164, 176),
+}
+
+local function make(className, properties, parent)
+    local object = Instance.new(className)
+    for key, value in pairs(properties or {}) do object[key] = value end
+    object.Parent = parent
+    return object
+end
+
+local window = make("Frame", {
+    Name = "Panel",
+    Size = UDim2.fromOffset(310, 385),
+    Position = UDim2.new(0.5, -155, 0.5, -192),
+    BackgroundColor3 = colors.background,
+    BorderSizePixel = 0,
+}, gui)
+make("UICorner", { CornerRadius = UDim.new(0, 9) }, window)
+
+local header = make("Frame", {
+    Name = "Header", Size = UDim2.new(1, 0, 0, 36),
+    BackgroundColor3 = colors.surface, BorderSizePixel = 0,
+}, window)
+make("UICorner", { CornerRadius = UDim.new(0, 9) }, header)
+local title = make("TextLabel", {
+    Size = UDim2.new(1, -82, 1, 0), Position = UDim2.fromOffset(12, 0),
+    BackgroundTransparency = 1, Text = "LOXY  /  AIMBOT + ESP", TextColor3 = colors.text,
+    Font = Enum.Font.GothamBold, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left,
+}, header)
+local minimizeButton = make("TextButton", {
+    Name = "Minimize", Size = UDim2.fromOffset(28, 26), Position = UDim2.new(1, -66, 0, 5),
+    BackgroundColor3 = colors.background, BorderSizePixel = 0, Text = "−",
+    TextColor3 = colors.text, Font = Enum.Font.GothamBold, TextSize = 16,
+}, header)
+make("UICorner", { CornerRadius = UDim.new(0, 5) }, minimizeButton)
+local closeButton = make("TextButton", {
+    Name = "Close", Size = UDim2.fromOffset(28, 26), Position = UDim2.new(1, -33, 0, 5),
+    BackgroundColor3 = colors.background, BorderSizePixel = 0, Text = "×",
+    TextColor3 = colors.text, Font = Enum.Font.GothamBold, TextSize = 16,
+}, header)
+make("UICorner", { CornerRadius = UDim.new(0, 5) }, closeButton)
+
+local content = make("ScrollingFrame", {
+    Name = "Controls", Position = UDim2.fromOffset(8, 43),
+    Size = UDim2.new(1, -16, 1, -51), BackgroundTransparency = 1,
+    BorderSizePixel = 0, ScrollBarThickness = 3, ScrollBarImageColor3 = colors.accent,
+    CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y,
+}, window)
+make("UIPadding", {
+    PaddingLeft = UDim.new(0, 2), PaddingRight = UDim.new(0, 5),
+    PaddingTop = UDim.new(0, 2), PaddingBottom = UDim.new(0, 6),
+}, content)
+make("UIListLayout", { Padding = UDim.new(0, 7), SortOrder = Enum.SortOrder.LayoutOrder }, content)
+
+local function makeLabel(text, height, parent, color, size, bold)
+    return make("TextLabel", {
+        Size = UDim2.new(1, 0, 0, height), BackgroundTransparency = 1,
+        Text = text, TextColor3 = color or colors.text,
+        Font = bold and Enum.Font.GothamBold or Enum.Font.Gotham,
+        TextSize = size or 12, TextXAlignment = Enum.TextXAlignment.Left,
+        TextWrapped = true,
+    }, parent)
+end
+
+local function makeButton(text, height, parent)
+    local button = make("TextButton", {
+        Size = UDim2.new(1, 0, 0, height), BackgroundColor3 = colors.surface,
+        BorderSizePixel = 0, Text = text, TextColor3 = colors.text,
+        Font = Enum.Font.GothamMedium, TextSize = 12,
+    }, parent)
+    make("UICorner", { CornerRadius = UDim.new(0, 6) }, button)
+    return button
+end
+
+makeLabel("Hold right mouse button to aim  ·  RightShift hides/shows panel", 30, content, colors.muted, 10)
+local aimButton = makeButton("Aimbot: OFF", 34, content)
+local function updateAimButton()
+    aimButton.Text = "Aimbot: " .. (aimbotEnabled and "ON" or "OFF") .. "   ·   Hold RMB"
+    aimButton.BackgroundColor3 = aimbotEnabled and colors.accent or colors.surface
+end
+track(aimButton.Activated:Connect(function()
+    aimbotEnabled = not aimbotEnabled
+    updateAimButton()
+end))
+
+local espButton = makeButton("ESP: OFF", 34, content)
+local function updateESPButton()
+    espButton.Text = "ESP: " .. (espEnabled and "ON" or "OFF") .. "  ·  visible/occluded + HP"
+    espButton.BackgroundColor3 = espEnabled and colors.accent or colors.surface
+end
+track(espButton.Activated:Connect(function()
+    espEnabled = not espEnabled
+    updateESPButton()
+    if not espEnabled then clearAllESP() end
+end))
+
+local activeSlider
+local function addSlider(label, minimum, maximum, initial, step, suffix, onChanged)
+    local block = make("Frame", {
+        Size = UDim2.new(1, 0, 0, 48), BackgroundColor3 = colors.surface, BorderSizePixel = 0,
+    }, content)
+    make("UICorner", { CornerRadius = UDim.new(0, 6) }, block)
+    local nameLabel = make("TextLabel", {
+        Position = UDim2.fromOffset(9, 4), Size = UDim2.new(1, -85, 0, 17),
+        BackgroundTransparency = 1, Text = label, TextColor3 = colors.text,
+        Font = Enum.Font.Gotham, TextSize = 11, TextXAlignment = Enum.TextXAlignment.Left,
+    }, block)
+    local valueLabel = make("TextLabel", {
+        AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -9, 0, 4),
+        Size = UDim2.fromOffset(72, 17), BackgroundTransparency = 1,
+        TextColor3 = colors.muted, Font = Enum.Font.Gotham, TextSize = 11,
+        TextXAlignment = Enum.TextXAlignment.Right,
+    }, block)
+    local rail = make("Frame", {
+        Position = UDim2.new(0, 9, 0, 29), Size = UDim2.new(1, -18, 0, 6),
+        BackgroundColor3 = colors.background, BorderSizePixel = 0,
+    }, block)
+    make("UICorner", { CornerRadius = UDim.new(1, 0) }, rail)
+    local fill = make("Frame", {
+        Size = UDim2.new(0, 0, 1, 0), BackgroundColor3 = colors.accent, BorderSizePixel = 0,
+    }, rail)
+    make("UICorner", { CornerRadius = UDim.new(1, 0) }, fill)
+    local knob = make("Frame", {
+        AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0, 0, 0.5, 0),
+        Size = UDim2.fromOffset(12, 12), BackgroundColor3 = colors.text, BorderSizePixel = 0,
+    }, rail)
+    make("UICorner", { CornerRadius = UDim.new(1, 0) }, knob)
+    local hitArea = make("TextButton", {
+        Position = UDim2.new(0, -4, 0, -8), Size = UDim2.new(1, 8, 0, 22),
+        BackgroundTransparency = 1, Text = "", AutoButtonColor = false,
+    }, rail)
+
+    local current = initial
+    local function render(value)
+        local rounded = math.floor((value / step) + 0.5) * step
+        current = math.clamp(rounded, minimum, maximum)
+        local ratio = (current - minimum) / (maximum - minimum)
+        fill.Size = UDim2.new(ratio, 0, 1, 0)
+        knob.Position = UDim2.new(ratio, 0, 0.5, 0)
+        valueLabel.Text = tostring(current) .. (suffix or "")
+        onChanged(current)
+    end
+    local function setFromInput(input)
+        local width = math.max(rail.AbsoluteSize.X, 1)
+        local ratio = math.clamp((input.Position.X - rail.AbsolutePosition.X) / width, 0, 1)
+        render(minimum + ratio * (maximum - minimum))
+    end
+    track(hitArea.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            activeSlider = { update = setFromInput }
+            setFromInput(input)
+        end
+    end))
+    render(initial)
+    return { Get = function() return current end, Set = render, Name = nameLabel }
+end
+local flyButton = makeButton("Fly: OFF", 32, content)
+local function updateFlyButton()
+    flyButton.Text = "Fly: " .. (flyEnabled and "ON" or "OFF") .. "  ·  WASD / Space / Shift"
+    flyButton.BackgroundColor3 = flyEnabled and colors.accent or colors.surface
+end
+track(flyButton.Activated:Connect(function()
+    flyEnabled = not flyEnabled
+    if not flyEnabled then cleanupFly() end
+    updateFlyButton()
+end))
+local flySpeedControl = addSlider("Fly speed", 1, 200, flySpeed, 1, "", function(value) flySpeed = value end)
+
+local noclipButton = makeButton("Noclip: OFF", 32, content)
+local function updateNoclipButton()
+    noclipButton.Text = "Noclip: " .. (noclipEnabled and "ON" or "OFF")
+    noclipButton.BackgroundColor3 = noclipEnabled and colors.accent or colors.surface
+end
+track(noclipButton.Activated:Connect(function()
+    noclipEnabled = not noclipEnabled
+    if not noclipEnabled then restoreNoclip() end
+    updateNoclipButton()
+end))
+local smoothnessControl = addSlider("Smoothness", 0.1, 1, smoothness, 0.01, "", function(value) smoothness = value end)
+local bodyRatioControl = addSlider("Body ratio", 0, 100, bodyRatio, 1, "%", function(value) bodyRatio = value end)
+local missRatioControl = addSlider("Miss ratio", 0, 100, missRatio, 1, "%", function(value) missRatio = value end)
+local maxDistanceControl = addSlider("Max distance", 0, 1000, maxDistance, 1, " studs", function(value) maxDistance = value end)
+
+local transitionButton = makeButton("Target transition: ON  ·  0.3s", 32, content)
+local function updateTransitionButton()
+    transitionButton.Text = "Target transition: " .. (acquireTransitionEnabled and "ON" or "OFF") .. "  ·  0.3s"
+    transitionButton.BackgroundColor3 = acquireTransitionEnabled and colors.accent or colors.surface
+end
+track(transitionButton.Activated:Connect(function()
+    acquireTransitionEnabled = not acquireTransitionEnabled
+    updateTransitionButton()
+end))
+
+local function whitelistOptions()
+    local options = { { label = "Username", player = nil }, { label = "No exclusion", player = nil } }
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            table.insert(options, { label = player.Name, player = player })
+        end
+    end
+    return options
+end
+local whitelistButton = makeButton("Exclude: Username  ›", 32, content)
+local function updateWhitelistButton()
+    whitelistButton.Text = "Exclude: " .. excludedLabel .. "  ›"
+end
+track(whitelistButton.Activated:Connect(function()
+    local options = whitelistOptions()
+    local index = 0
+    for i, option in ipairs(options) do
+        if option.label == excludedLabel then index = i break end
+    end
+    local nextOption = options[index % #options + 1]
+    excludedPlayer = nextOption.player
+    excludedName = excludedPlayer and excludedPlayer.Name or ""
+    excludedLabel = nextOption.label
+    updateWhitelistButton()
+end))
+
+local resetButton = makeButton("Reset settings", 30, content)
+track(resetButton.Activated:Connect(function()
+    aimbotEnabled = false
+    espEnabled = false
+    flyEnabled = false
+    noclipEnabled = false
+    cleanupFly()
+    restoreNoclip()
+    smoothness = 0.76
+    bodyRatio = 50
+    missRatio = 5
+    maxDistance = 300
+    flySpeed = 50
+    acquireTransitionEnabled = true
+    excludedPlayer = nil
+    excludedName = ""
+    excludedLabel = "Username"
+    flySpeedControl.Set(50)
+    smoothnessControl.Set(0.76)
+    bodyRatioControl.Set(50)
+    missRatioControl.Set(5)
+    maxDistanceControl.Set(300)
+    updateAimButton()
+    updateESPButton()
+    updateFlyButton()
+    updateNoclipButton()
+    updateTransitionButton()
+    updateWhitelistButton()
+end))
+
+local unloadButton = makeButton("Unload script", 30, content)
+unloadButton.BackgroundColor3 = Color3.fromRGB(135, 48, 55)
+local function unload()
+    aimbotEnabled = false
+    espEnabled = false
+    flyEnabled = false
+    noclipEnabled = false
+    cleanupFly()
+    restoreNoclip()
+    pcall(function()
+        RunService:UnbindFromRenderStep("RivalsAimbot")
+        RunService:UnbindFromRenderStep("LoxyAimbot")
+    end)
+    clearAllESP()
+    ENV.LoxyAimbotGeneration = generation + 1
+    for _, connection in ipairs(ENV.LoxyAimbotConnections) do
+        pcall(function() connection:Disconnect() end)
+    end
+    ENV.LoxyAimbotConnections = {}
+    ENV.LoxyAimbotUI = nil
+    ENV.LoxyAimbotCleanup = nil
+    pcall(function() gui:Destroy() end)
+end
+ENV.LoxyAimbotCleanup = unload
+track(unloadButton.Activated:Connect(unload))
+
+local minimized = false
+track(minimizeButton.Activated:Connect(function()
+    minimized = not minimized
+    content.Visible = not minimized
+    window.Size = minimized and UDim2.fromOffset(310, 36) or UDim2.fromOffset(310, 385)
+    minimizeButton.Text = minimized and "+" or "−"
+end))
+track(closeButton.Activated:Connect(function() window.Visible = false end))
+
+local dragging, dragStart, windowStart
+track(header.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        windowStart = window.Position
+    end
+end))
+track(UserInputService.InputChanged:Connect(function(input)
+    if activeSlider and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        activeSlider.update(input)
+    end
+    if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        local delta = input.Position - dragStart
+        window.Position = UDim2.new(windowStart.X.Scale, windowStart.X.Offset + delta.X, windowStart.Y.Scale, windowStart.Y.Offset + delta.Y)
+    end
+end))
+track(UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = false
+        activeSlider = nil
+    end
+end))
+track(UserInputService.InputBegan:Connect(function(input, processed)
+    if processed or UserInputService:GetFocusedTextBox() then return end
+    if input.KeyCode == Enum.KeyCode.RightShift then
+        window.Visible = not window.Visible
+    elseif input.KeyCode == Enum.KeyCode.F5 then
+        aimbotEnabled = not aimbotEnabled
+        updateAimButton()
+    elseif input.KeyCode == Enum.KeyCode.F6 then
+        flyEnabled = not flyEnabled
+        if not flyEnabled then cleanupFly() end
+        updateFlyButton()
+    elseif input.KeyCode == Enum.KeyCode.F7 then
+        noclipEnabled = not noclipEnabled
+        if not noclipEnabled then restoreNoclip() end
+        updateNoclipButton()
+    end
+end))
+track(Players.PlayerAdded:Connect(function(player)
+    if excludedName ~= "" and player.Name == excludedName then excludedPlayer = player end
+end))
+track(Players.PlayerRemoving:Connect(function(player)
+    if player == excludedPlayer then
+        excludedPlayer = nil
+        excludedName = ""
+        excludedLabel = "Username"
+        updateWhitelistButton()
+    end
+end))
+
+local lockedTargetPart = nil
+local lockedTargetPlayer = nil
+local previousTargetPart = nil
+local transitionStartTime = 0
+local startCFrame = nil
+local targetAcquireDuration = 0.3
+local playerIndex = 1
+local batchSize = 3
+local raycastParams = RaycastParams.new()
+raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+
+local function isVisible(targetPart)
+    local camera = Workspace.CurrentCamera
+    if not camera or not targetPart or not targetPart.Parent then return false end
+    local localCharacter = LocalPlayer.Character
+    if localCharacter and targetPart:IsDescendantOf(localCharacter) then return false end
+    raycastParams.FilterDescendantsInstances = { localCharacter, camera }
+    local result = Workspace:Raycast(
+        camera.CFrame.Position,
+        targetPart.Position - camera.CFrame.Position,
+        raycastParams
+    )
+    return not result or result.Instance:IsDescendantOf(targetPart.Parent)
+end
+
+local function clearTarget()
+    lockedTargetPart = nil
+    lockedTargetPlayer = nil
+    previousTargetPart = nil
+end
+
+RunService:BindToRenderStep("RivalsAimbot", Enum.RenderPriority.Camera.Value + 1, function()
+    if ENV.LoxyAimbotGeneration ~= generation then return end
+    local camera = Workspace.CurrentCamera
+    if not camera then return end
+    local character = LocalPlayer.Character
+    local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+    local rightMouseDown = UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2)
+    if not aimbotEnabled or not rightMouseDown then
+        clearTarget()
+        return
+    end
+
+    local myPosition = rootPart and rootPart.Position or camera.CFrame.Position
+    if lockedTargetPlayer then
+        local targetCharacter = lockedTargetPlayer.Character
+        local humanoid = targetCharacter and targetCharacter:FindFirstChildOfClass("Humanoid")
+        local distance = lockedTargetPart and (myPosition - lockedTargetPart.Position).Magnitude
+        if lockedTargetPlayer == LocalPlayer or not targetCharacter or not humanoid or humanoid.Health <= 0
+            or not lockedTargetPart or not lockedTargetPart:IsDescendantOf(targetCharacter)
+            or distance > maxDistance or not isVisible(lockedTargetPart) or lockedTargetPlayer == excludedPlayer then
+            clearTarget()
+        end
+    end
+
+    if not lockedTargetPart then
+        local allPlayers = Players:GetPlayers()
+        local count = #allPlayers
+        if count > 0 then
+            if playerIndex > count then playerIndex = 1 end
+            local checkedCount = 0
+            local shortestScreenDistance = math.huge
+            local viewportCenter = camera.ViewportSize * 0.5
+            while checkedCount < batchSize and not lockedTargetPart do
+                local player = allPlayers[playerIndex]
+                local targetCharacter = player and player.Character
+                if player and player ~= LocalPlayer and targetCharacter and targetCharacter ~= LocalPlayer.Character
+                    and player ~= excludedPlayer then
+                    local targetRoot = targetCharacter:FindFirstChild("HumanoidRootPart")
+                    local head = targetCharacter:FindFirstChild("Head")
+                    local humanoid = targetCharacter:FindFirstChildOfClass("Humanoid")
+                    if targetRoot and head and humanoid and humanoid.Health > 0 then
+                        local distance = (myPosition - targetRoot.Position).Magnitude
+                        if distance <= maxDistance and math.random(1, 100) > missRatio then
+                            local targetPart = (math.random(1, 100) > bodyRatio) and head or targetRoot
+                            if isVisible(targetPart) then
+                                local screenPoint, onScreen = camera:WorldToScreenPoint(targetPart.Position)
+                                if onScreen and screenPoint.Z > 0 then
+                                    local screenDistance = (Vector2.new(screenPoint.X, screenPoint.Y) - viewportCenter).Magnitude
+                                    if screenDistance < shortestScreenDistance then
+                                        shortestScreenDistance = screenDistance
+                                        lockedTargetPart = targetPart
+                                        lockedTargetPlayer = player
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+                playerIndex = playerIndex % count + 1
+                checkedCount += 1
+            end
+        end
+    end
+
+    if lockedTargetPart then
+        if lockedTargetPart ~= previousTargetPart then
+            transitionStartTime = tick()
+            startCFrame = camera.CFrame
+            previousTargetPart = lockedTargetPart
+        end
+        local targetCFrame = CFrame.new(camera.CFrame.Position, lockedTargetPart.Position)
+        local elapsed = tick() - transitionStartTime
+        if acquireTransitionEnabled and elapsed < targetAcquireDuration then
+            local alpha = elapsed / targetAcquireDuration
+            alpha = alpha * alpha * (3 - 2 * alpha)
+            camera.CFrame = startCFrame:Lerp(targetCFrame, alpha)
+        else
+            camera.CFrame = smoothness >= 1 and targetCFrame or camera.CFrame:Lerp(targetCFrame, smoothness)
+        end
+    end
+end)
+
+track(RunService.RenderStepped:Connect(function()
+    if ENV.LoxyAimbotGeneration ~= generation then return end
+    local character = LocalPlayer.Character
+    local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+    local camera = Workspace.CurrentCamera
+    if not flyEnabled or not rootPart or not camera then
+        cleanupFly()
+        return
+    end
+    if flyRootPart ~= rootPart or not flyVelocity or not flyVelocity.Parent then
+        cleanupFly()
+        flyRootPart = rootPart
+        flyVelocity = Instance.new("BodyVelocity")
+        flyVelocity.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+        flyVelocity.Velocity = Vector3.zero
+        flyVelocity.Parent = rootPart
+        flyGyro = Instance.new("BodyGyro")
+        flyGyro.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
+        flyGyro.CFrame = rootPart.CFrame
+        flyGyro.Parent = rootPart
+    end
+    local direction = Vector3.zero
+    if UserInputService:IsKeyDown(Enum.KeyCode.W) then direction += camera.CFrame.LookVector end
+    if UserInputService:IsKeyDown(Enum.KeyCode.S) then direction -= camera.CFrame.LookVector end
+    if UserInputService:IsKeyDown(Enum.KeyCode.A) then direction -= camera.CFrame.RightVector end
+    if UserInputService:IsKeyDown(Enum.KeyCode.D) then direction += camera.CFrame.RightVector end
+    if UserInputService:IsKeyDown(Enum.KeyCode.Space) then direction += Vector3.new(0, 1, 0) end
+    if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then direction -= Vector3.new(0, 1, 0) end
+    flyVelocity.Velocity = direction * flySpeed
+    flyGyro.CFrame = camera.CFrame
+end))
+
+track(RunService.Stepped:Connect(function()
+    if not noclipEnabled then return end
+    local character = LocalPlayer.Character
+    if not character then return end
+    for _, part in ipairs(character:GetDescendants()) do
+        if part:IsA("BasePart") then
+            if savedCollisions[part] == nil then savedCollisions[part] = part.CanCollide end
+            part.CanCollide = false
+        end
+    end
+end))
+track(RunService.RenderStepped:Connect(function()
+    if ENV.LoxyAimbotGeneration ~= generation then return end
+    local camera = Workspace.CurrentCamera
+    local localCharacter = LocalPlayer.Character
+    local rootPart = localCharacter and localCharacter:FindFirstChild("HumanoidRootPart")
+    local myPosition = rootPart and rootPart.Position or (camera and camera.CFrame.Position)
+    for _, player in ipairs(Players:GetPlayers()) do
+        local targetCharacter = player.Character
+        if player == LocalPlayer or (targetCharacter and targetCharacter == localCharacter) then
+            clearESPForCharacter(targetCharacter)
+        elseif targetCharacter then
+            local highlight = targetCharacter:FindFirstChild("LoxyESP_Highlight")
+            local hpTag = targetCharacter:FindFirstChild("LoxyESP_HP")
+            if not espEnabled or player == excludedPlayer then
+                if highlight then highlight:Destroy() end
+                if hpTag then hpTag:Destroy() end
+            else
+                local head = targetCharacter:FindFirstChild("Head")
+                local targetRoot = targetCharacter:FindFirstChild("HumanoidRootPart")
+                local humanoid = targetCharacter:FindFirstChildOfClass("Humanoid")
+                if not highlight then
+                    highlight = Instance.new("Highlight")
+                    highlight.Name = "LoxyESP_Highlight"
+                    highlight.Adornee = targetCharacter
+                    highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+                    highlight.FillTransparency = 0.5
+                    highlight.Parent = targetCharacter
+                end
+                highlight.FillColor = head and isVisible(head)
+                    and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0)
+
+                local distance = (myPosition and targetRoot) and (myPosition - targetRoot.Position).Magnitude or math.huge
+                if head and humanoid and humanoid.MaxHealth > 0 and distance <= 1000 then
+                    if not hpTag then
+                        hpTag = Instance.new("BillboardGui")
+                        hpTag.Name = "LoxyESP_HP"
+                        hpTag.Adornee = head
+                        hpTag.Size = UDim2.fromOffset(100, 40)
+                        hpTag.StudsOffset = Vector3.new(0, 2.2, 0)
+                        hpTag.AlwaysOnTop = true
+                        hpTag.MaxDistance = 1000
+                        hpTag.Parent = targetCharacter
+                        local textLabel = Instance.new("TextLabel")
+                        textLabel.Name = "HPText"
+                        textLabel.Size = UDim2.fromScale(1, 1)
+                        textLabel.BackgroundTransparency = 1
+                        textLabel.TextStrokeTransparency = 0
+                        textLabel.TextSize = 13
+                        textLabel.Font = Enum.Font.SourceSansBold
+                        textLabel.Parent = hpTag
+                    end
+                    local textLabel = hpTag:FindFirstChild("HPText")
+                    if textLabel then
+                        local currentHP = math.clamp(math.floor(humanoid.Health), 0, humanoid.MaxHealth)
+                        local maxHP = math.floor(humanoid.MaxHealth)
+                        local hpPercent = currentHP / maxHP
+                        textLabel.Text = "HP: " .. currentHP .. " / " .. maxHP
+                        if hpPercent > 0.5 then
+                            textLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+                        elseif hpPercent > 0.2 then
+                            textLabel.TextColor3 = Color3.fromRGB(255, 255, 0)
+                        else
+                            textLabel.TextColor3 = Color3.fromRGB(255, 50, 50)
+                        end
+                    end
+                elseif hpTag then
+                    hpTag:Destroy()
+                end
+            end
+        end
+    end
+end))
+print("[Loxy] loaded  |  F5 aim, F6 fly, F7 noclip, RightShift UI")
+
+
+
+
+
+
+
+
+
+
+
