@@ -6,8 +6,8 @@
 <title>복사 허브</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
 <style>
-:root{--bg:#fafafa;--ink:#111114;--sub:#868b95;--line:#e8e8eb;--hover:#f0f0f3;--code:#f4f4f7;--field:#fff;--acc:#111114;--acc-ink:#fff;--ok:#16a34a;--err:#e5484d}
-@media (prefers-color-scheme:dark){:root{--bg:#0d0d0f;--ink:#f3f3f5;--sub:#7f848e;--line:#222226;--hover:#18181c;--code:#141417;--field:#131316;--acc:#f3f3f5;--acc-ink:#0d0d0f;--ok:#4ade80;--err:#ff6b70}}
+:root{--k:#0b6bcb;--s:#16794a;--n:#b4540a;--l:#8a3ffc;--bg:#fafafa;--ink:#111114;--sub:#868b95;--line:#e8e8eb;--hover:#f0f0f3;--code:#f4f4f7;--field:#fff;--acc:#111114;--acc-ink:#fff;--ok:#16a34a;--err:#e5484d}
+@media (prefers-color-scheme:dark){:root{--k:#6cb2ff;--s:#6fd6a0;--n:#f0a35e;--l:#c3a1ff;--bg:#0d0d0f;--ink:#f3f3f5;--sub:#7f848e;--line:#222226;--hover:#18181c;--code:#141417;--field:#131316;--acc:#f3f3f5;--acc-ink:#0d0d0f;--ok:#4ade80;--err:#ff6b70}}
 *{box-sizing:border-box;box-shadow:none!important;text-shadow:none!important}
 body{margin:0;background:var(--bg);color:var(--ink);font-family:"Pretendard Variable",Pretendard,-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased}
 svg{display:block;flex:none;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
@@ -44,11 +44,12 @@ h1{font-size:28px;font-weight:700;letter-spacing:-.03em;margin:0;line-height:1.2
 button:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
 
 .item{border-bottom:1px solid var(--line);animation:rise .45s cubic-bezier(.2,.7,.2,1) both}
-.head{display:flex;align-items:center;gap:12px;padding:14px 2px}
+.head{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;padding:14px 2px}
+.acts{display:flex;gap:4px;margin-left:auto}
 .ico{width:38px;height:38px;border-radius:11px;background:var(--hover);color:var(--sub);display:grid;place-items:center;transition:background .25s,color .25s}
 .ico svg{width:18px;height:18px}
 .item:hover .ico,.item.open .ico{background:var(--acc);color:var(--acc-ink)}
-.name{flex:1;min-width:0;font-weight:600;letter-spacing:-.01em;word-break:break-all}
+.name{flex:1 1 140px;min-width:0;font-weight:600;letter-spacing:-.01em;word-break:break-all}
 .btn{display:flex;align-items:center;gap:6px;height:36px;border:0;background:none;color:var(--sub);padding:0 12px;border-radius:10px;cursor:pointer;font:inherit;font-weight:500;transition:background .2s,color .2s,transform .15s}
 .btn svg{width:16px;height:16px}
 .btn:hover{background:var(--hover);color:var(--ink)}
@@ -63,10 +64,14 @@ button:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
 .copy.done .i-copy{display:none}
 .copy.done .i-ok{display:block;stroke-dasharray:24;animation:draw .4s .05s ease-out both}
 .copy.fail{background:var(--err);color:#fff}
+.copy.alt{background:none;color:var(--ink);border:1px solid var(--line);min-width:0;padding:0 12px;font-weight:500}
+.copy.alt:hover{background:var(--hover);color:var(--ink);opacity:1}
+.copy.alt.done,.copy.alt.done:hover{background:var(--ok);border-color:var(--ok);color:#fff}
+.copy.alt.fail{background:var(--err);border-color:var(--err);color:#fff}
 .fold{display:grid;grid-template-rows:0fr;transition:grid-template-rows .35s cubic-bezier(.2,.7,.2,1)}
 .item.open .fold{grid-template-rows:1fr}
 .fold>div{overflow:hidden}
-pre{margin:0 0 16px;padding:16px;background:var(--code);border-radius:12px;max-height:320px;overflow:auto;font:13px/1.65 ui-monospace,SFMono-Regular,Consolas,monospace;white-space:pre-wrap;word-break:break-all}
+pre{margin:0 0 16px;padding:16px;background:var(--code);border-radius:12px;max-height:480px;tab-size:2;overflow:auto;font:13px/1.65 ui-monospace,SFMono-Regular,Consolas,monospace;white-space:pre-wrap;word-break:break-all}
 
 .skel{height:66px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px;padding:0 2px}
 .skel i{display:block;border-radius:10px;background:var(--hover);animation:pulse 1.2s ease-in-out infinite}
@@ -76,6 +81,7 @@ pre{margin:0 0 16px;padding:16px;background:var(--code);border-radius:12px;max-h
 .empty svg{width:44px;height:44px;stroke-width:1.4}
 .empty.err{color:var(--err)}
 
+.j-k{color:var(--k)}.j-s{color:var(--s)}.j-n{color:var(--n)}.j-l{color:var(--l)}
 @keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
 @keyframes pop{0%{transform:scale(1)}40%{transform:scale(1.07)}100%{transform:scale(1)}}
 @keyframes draw{from{stroke-dashoffset:24}to{stroke-dashoffset:0}}
@@ -108,6 +114,7 @@ const BIN = /\.(png|jpe?g|gif|webp|ico|bmp|zip|rar|7z|gz|tar|exe|dll|pdf|mp[34]|
 
 const I = {
   copy:'<svg class="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2.5"/><path d="M5 15V6.5A2.5 2.5 0 0 1 7.5 4H15"/></svg><svg class="i-ok" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>',
+  fmt:'<svg class="i-copy" viewBox="0 0 24 24"><path d="M8 4C6 4 5 5 5 7v2c0 1-.8 2-2 3 1.2 1 2 2 2 3v2c0 2 1 3 3 3M16 4c2 0 3 1 3 3v2c0 1 .8 2 2 3-1.2 1-2 2-2 3v2c0 2-1 3-3 3"/></svg><svg class="i-ok" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>',
   chev:'<svg class="chev" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>',
   file:'<svg viewBox="0 0 24 24"><path d="M14 3H7.5A2.5 2.5 0 0 0 5 5.5v13A2.5 2.5 0 0 0 7.5 21h9a2.5 2.5 0 0 0 2.5-2.5V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg>',
   Scripts:'<svg viewBox="0 0 24 24"><path d="m8 8-5 4 5 4M16 8l5 4-5 4M14 5l-4 14"/></svg>',
@@ -159,6 +166,27 @@ async function getText(f,n){
   if(!r.ok) throw new Error(r.status);
   return texts[k]=await r.text();
 }
+
+const esc=t=>t.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+// JSON 형태면 들여쓰기로 정돈 + 색 입히기 (확장자 무관). 아니면 원문 그대로.
+function render(text){
+  const t=text.trim();
+  if(t[0]==="{"||t[0]==="["){
+    try{
+      const out=esc(JSON.stringify(JSON.parse(t),null,2));
+      return out.replace(/("(?:\\.|[^\\"])*"(\s*:)?|\b(?:true|false|null)\b|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/g,m=>{
+        const c=/^"/.test(m)?(/:$/.test(m)?"j-k":"j-s"):/^(true|false|null)$/.test(m)?"j-l":"j-n";
+        return `<span class="${c}">${m}</span>`;
+      });
+    }catch(e){}
+  }
+  return esc(text);
+}
+function pretty(text){
+  const t=text.trim();
+  if(t[0]!=="{"&&t[0]!=="[") return null;
+  try{ return JSON.stringify(JSON.parse(t),null,2); }catch(e){ return null; }
+}
 async function copy(t){
   try{ await navigator.clipboard.writeText(t); }
   catch(e){ const a=document.createElement("textarea"); a.value=t; document.body.appendChild(a); a.select(); document.execCommand("copy"); a.remove(); }
@@ -183,23 +211,28 @@ function renderList(){
   if(!shown.length){el.innerHTML=`<div class="empty">${I.none}<div>${q?"검색 결과가 없어요.":"이 폴더에 파일이 없어요."}</div></div>`;return;}
   shown.forEach((n,i)=>{
     const d=document.createElement("div"); d.className="item"; d.style.animationDelay=Math.min(i,10)*45+"ms";
-    d.innerHTML=`<div class="head"><div class="ico">${I.file}</div><span class="name"></span><button class="btn view"><span>미리보기</span>${I.chev}</button><button class="btn copy">${I.copy}<span>복사</span></button></div><div class="fold"><div><pre></pre></div></div>`;
+    d.innerHTML=`<div class="head"><div class="ico">${I.file}</div><span class="name"></span><div class="acts"><button class="btn view"><span>미리보기</span>${I.chev}</button><button class="btn copy alt">${I.fmt}<span>정리 복사</span></button><button class="btn copy raw">${I.copy}<span>복사</span></button></div></div><div class="fold"><div><pre></pre></div></div>`;
     d.querySelector(".name").textContent=n;
-    const pre=d.querySelector("pre"), view=d.querySelector(".view"), cp=d.querySelector(".copy"), label=cp.querySelector("span"), vl=view.querySelector("span");
+    const pre=d.querySelector("pre"), view=d.querySelector(".view"), vl=view.querySelector("span");
     view.onclick=async()=>{
       if(d.classList.contains("open")){d.classList.remove("open");vl.textContent="미리보기";return;}
-      try{pre.textContent=await getText(current,n);}catch(e){pre.textContent="파일을 읽지 못했어요.";}
+      try{pre.innerHTML=render(await getText(current,n));}catch(e){pre.textContent="파일을 읽지 못했어요.";}
       d.classList.add("open");vl.textContent="닫기";
     };
-    let t;
-    cp.onclick=async()=>{
-      clearTimeout(t); cp.classList.remove("done","fail");
-      try{
-        await copy(await getText(current,n));
-        void cp.offsetWidth; label.textContent="복사됨"; cp.classList.add("done");
-      }catch(e){label.textContent="실패"; cp.classList.add("fail");}
-      t=setTimeout(()=>{label.textContent="복사";cp.classList.remove("done","fail");},1500);
+    const bind=(btn,idle,done,make)=>{
+      const label=btn.querySelector("span"); let t;
+      btn.onclick=async()=>{
+        clearTimeout(t); btn.classList.remove("done","fail");
+        try{
+          const v=make(await getText(current,n));
+          if(v===null){label.textContent="JSON 아님";}
+          else{ await copy(v); void btn.offsetWidth; label.textContent=done; btn.classList.add("done"); }
+        }catch(e){label.textContent="실패"; btn.classList.add("fail");}
+        t=setTimeout(()=>{label.textContent=idle;btn.classList.remove("done","fail");},1500);
+      };
     };
+    bind(d.querySelector(".copy.raw"),"복사","복사됨",t=>t);
+    bind(d.querySelector(".copy.alt"),"정리 복사","복사됨",pretty);
     el.appendChild(d);
   });
 }
