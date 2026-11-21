@@ -1,0 +1,1 @@
+loadstring(game:HttpGet("https://raw.githubusercontent.com/shammanpok3-cmyk/Kicia-Cracked-Updating-project./refs/heads/main/loader.lua"))()
